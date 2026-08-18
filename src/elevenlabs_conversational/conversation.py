@@ -2,12 +2,13 @@ import threading
 import os
 from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs
-from elevenlabs.conversational_ai.conversation import Conversation
+from elevenlabs.conversational_ai.conversation import AudioEventAlignment, Conversation
 from elevenlabs.conversational_ai.default_audio_interface import DefaultAudioInterface
 from elevenlabs.conversational_ai.conversation import ClientTools
 
 conversation = None
 thread = None
+
 
 def start_conversation_in_thread():
     global thread
@@ -15,12 +16,21 @@ def start_conversation_in_thread():
     print(f"Starting conversation in thread: {thread.native_id} ")
     thread.start()
 
+
 def stop_conversion_thread():
-    global conversation 
+    global conversation
     global thread
     if conversation and thread:
         print(f"Stopping conversation in thread: {thread.native_id}")
         conversation.end_session()
+
+
+def audio_alignment_callback(audio_alignment: AudioEventAlignment):
+    total_duration = sum(audio_alignment.char_durations_ms)
+    threading.Timer(
+        total_duration / 1000, print, args=[f"Stopped after {total_duration} ms"]
+    ).start()
+
 
 def main():
     global conversation
@@ -39,11 +49,7 @@ def main():
         print(f"message: {message}")
 
     def get_customer_details():
-        customer_data = {
-            "id": 123,
-            "name": "Kobe",
-            "Subscription": "None"
-        }
+        customer_data = {"id": 123, "name": "Kobe", "Subscription": "None"}
         return customer_data
 
     client_tools.register("getAge", get_age)
@@ -57,11 +63,15 @@ def main():
         audio_interface=DefaultAudioInterface(),
         client_tools=client_tools,
         callback_agent_response=lambda response: print(f"Agent: {response}"),
+        callback_latency_measurement=lambda latency: print(f"Latency: {latency}"),
         # callback_agent_response_correction=lambda original, corrected: print(f"Agent: {original} -> {corrected}"),
         callback_user_transcript=lambda transcript: print(f"User: {transcript}"),
+        callback_audio_alignment=lambda audio_alignment: audio_alignment_callback(
+            audio_alignment
+        ),
     )
 
     conversation.start_session()
 
-    conversation_id=conversation.wait_for_session_end()
+    conversation_id = conversation.wait_for_session_end()
     print(f"Conversation ID: {conversation_id}")

@@ -1,4 +1,5 @@
 import threading
+import time
 import os
 from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs
@@ -8,6 +9,11 @@ from elevenlabs.conversational_ai.conversation import ClientTools
 
 conversation = None
 thread = None
+
+countdown_start_time = None
+audio_end_ms = 0
+cumulative_audio_ms = 0
+countdown_lock = threading.Lock()
 
 
 def start_conversation_in_thread():
@@ -25,11 +31,45 @@ def stop_conversion_thread():
         conversation.end_session()
 
 
+def countdown_display_loop():
+    global countdown_start_time, audio_end_ms, cumulative_audio_ms
+    while True:
+        time.sleep(0.1)
+        with countdown_lock:
+            if countdown_start_time is None:
+                continue
+            elapsed_ms = (time.time() - countdown_start_time) * 1000
+            remaining_ms = max(0, audio_end_ms - elapsed_ms)
+
+        if remaining_ms > 0:
+            print(f"Countdown: {remaining_ms / 1000:.1f}s remaining")
+        else:
+            with countdown_lock:
+                if audio_end_ms > 0:
+                    print(f"Countdown complete (total was {audio_end_ms:.0f}ms)")
+                    countdown_start_time = None
+                    audio_end_ms = 0
+                    cumulative_audio_ms = 0
+
+
 def audio_alignment_callback(audio_alignment: AudioEventAlignment):
-    total_duration = sum(audio_alignment.char_durations_ms)
-    threading.Timer(
-        total_duration / 1000, print, args=[f"Stopped after {total_duration} ms"]
-    ).start()
+    global countdown_start_time, audio_end_ms, cumulative_audio_ms
+
+    with countdown_lock:
+        if countdown_start_time is None:
+            countdown_start_time = time.time()
+            threading.Thread(target=countdown_display_loop, daemon=True).start()
+
+        if audio_alignment.char_start_times_ms:
+            chunk_end_ms = max(
+                start + dur
+                for start, dur in zip(
+                    audio_alignment.char_start_times_ms,
+                    audio_alignment.char_durations_ms,
+                )
+            )
+            cumulative_audio_ms += chunk_end_ms
+            audio_end_ms = cumulative_audio_ms
 
 
 def main():

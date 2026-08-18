@@ -8,7 +8,6 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "asyncio>=4.0.0",
     "dotenv>=0.9.9",
     "elevenlabs>=2.63.0",
     "fastapi[standard]>=0.141.1",
